@@ -14,20 +14,18 @@ const port = process.env.PORT || 5005;
 app.use(helmet());
 
 // CORS
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [
-  "http://localhost:3001",
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:3000"];
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: [
-      "Origin",
-      "X-Requested-With",
-      "Content-Type",
-      "Accept",
-      "x-access-token",
-    ],
+    allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept", "x-access-token"],
     credentials: true,
   }),
 );
