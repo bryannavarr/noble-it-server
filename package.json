@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node noble.server.js",
+    "dev": "nodemon noble.server.js",
+    "seed:admin": "node noble-app/scripts/seed-admin.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -10,8 +13,10 @@
   "description": "",
   "dependencies": {
     "axios": "^1.13.6",
+    "bcryptjs": "^3.0.3",
     "body-parse": "^0.1.0",
     "body-parser": "^1.19.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^2.0.0",
     "express": "^4.17.1",
@@ -23,6 +28,7 @@
     "helmet": "^8.1.0",
     "joi": "^17.13.3",
     "joi-objectid": "^3.0.1",
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.6.0",
     "nodemailer": "^8.0.4",
     "nodemon": "^3.1.14",

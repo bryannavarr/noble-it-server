@@ -30,9 +30,15 @@ const consultationSchema = Joi.object({
   source: Joi.string().trim().optional().allow(""),
 });
 
+const adminLoginSchema = Joi.object({
+  email: Joi.string().trim().email().required(),
+  password: Joi.string().max(200).required(),
+});
+
 module.exports = {
   contactUsSchema,
   onDemandSupportSchema,
   startProjectSchema,
   consultationSchema,
+  adminLoginSchema,
 };

@@ -2,6 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
+const cookieParser = require("cookie-parser");
 const router = require("./noble-app/routes");
 
 // initialize dotenv first before anything else
@@ -27,6 +28,9 @@ app.use(
 // Body parsing
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Cookie parsing (required to read the HttpOnly auth cookie)
+app.use(cookieParser());
 
 // Routes
 app.use(router);
