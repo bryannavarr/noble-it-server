@@ -1,12 +1,12 @@
+// Load env vars before any other require, since modules like the DB pool
+// read process.env at require time.
+require("dotenv").config();
+
 const express = require("express");
-const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const router = require("./noble-app/routes");
-
-// initialize dotenv first before anything else
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5005;
