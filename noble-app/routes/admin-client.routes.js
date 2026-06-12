@@ -9,5 +9,6 @@ const { authenticateToken } = require("../middleware/auth.middleware");
 router.use(authenticateToken);
 
 router.get("/", clientController.list);
+router.patch("/:id", clientController.update);
 
 module.exports = router;

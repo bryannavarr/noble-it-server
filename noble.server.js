@@ -19,7 +19,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || ["http://local
 app.use(
   cors({
     origin: allowedOrigins,
-    methods: ["GET", "POST", "PUT", "DELETE, OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept", "x-access-token"],
     credentials: true,
   }),

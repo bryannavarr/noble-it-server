@@ -74,6 +74,37 @@ const clientListSchema = Joi.object({
   sortDir: Joi.string().lowercase().valid("asc", "desc").default("desc"),
 });
 
+const multiEmailField = Joi.string()
+  .trim()
+  .custom((value, helpers) => {
+    const list = value
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (list.length === 0) {
+      return helpers.error("any.invalid", { message: "at least one email is required" });
+    }
+    for (const e of list) {
+      const { error } = Joi.string().email().validate(e);
+      if (error) return helpers.error("string.email", { value: e });
+    }
+    return list.join(", ");
+  });
+
+const clientUpdateSchema = Joi.object({
+  name: Joi.string().trim().max(255),
+  contact_name: Joi.string().trim().max(255).allow("", null),
+  email: multiEmailField,
+  phone: Joi.string().trim().max(50).allow("", null),
+  website: Joi.string().trim().max(255).allow("", null),
+  default_rate: Joi.number().min(0).max(9999999.99),
+  source: Joi.string().trim().max(100).allow("", null),
+  acquired_at: Joi.date().iso().allow(null),
+  last_serviced_at: Joi.date().iso().allow(null),
+  under_contract: Joi.boolean(),
+  has_reviewed: Joi.boolean(),
+}).min(1);
+
 module.exports = {
   contactUsSchema,
   onDemandSupportSchema,
@@ -82,4 +113,5 @@ module.exports = {
   adminLoginSchema,
   ticketListSchema,
   clientListSchema,
+  clientUpdateSchema,
 };

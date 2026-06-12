@@ -11,6 +11,40 @@ const SORT_COLUMN_SQL = {
   created_at: "created_at",
 };
 
+// Columns the PATCH endpoint is allowed to write. Order doesn't matter;
+// updateById builds the SET clause from whatever keys are present in `data`.
+const UPDATABLE_COLUMNS = [
+  "name",
+  "contact_name",
+  "email",
+  "phone",
+  "website",
+  "default_rate",
+  "source",
+  "acquired_at",
+  "last_serviced_at",
+  "under_contract",
+  "has_reviewed",
+];
+
+// Columns returned by list / find endpoints.
+const SELECT_COLUMNS = `
+  id,
+  name,
+  contact_name,
+  email,
+  phone,
+  website,
+  default_rate,
+  source,
+  acquired_at,
+  last_serviced_at,
+  under_contract,
+  has_reviewed,
+  created_at,
+  updated_at
+`;
+
 // Search hits company name, contact name, and email.
 const SEARCH_WHERE_SQL = `
   name LIKE ?
@@ -57,4 +91,33 @@ const listPaginated = async ({ page, pageSize, search, sort, sortDir }) => {
   return { items, total: countRow.total };
 };
 
-module.exports = { listPaginated };
+const findById = async (id) => {
+  const [rows] = await pool.query(`SELECT ${SELECT_COLUMNS} FROM clients WHERE id = ? LIMIT 1`, [
+    id,
+  ]);
+  return rows[0] || null;
+};
+
+// Builds a partial UPDATE from whitelisted keys in `data`. Returns the number
+// of affected rows (0 means the id didn't exist).
+const updateById = async (id, data) => {
+  const setParts = [];
+  const values = [];
+  for (const col of UPDATABLE_COLUMNS) {
+    if (!Object.prototype.hasOwnProperty.call(data, col)) continue;
+    setParts.push(`${col} = ?`);
+    // Empty strings collapse to NULL for nullable optional fields.
+    const v = data[col];
+    values.push(v === "" ? null : v);
+  }
+  if (setParts.length === 0) return 0;
+  values.push(id);
+
+  const [result] = await pool.query(
+    `UPDATE clients SET ${setParts.join(", ")} WHERE id = ?`,
+    values,
+  );
+  return result.affectedRows;
+};
+
+module.exports = { listPaginated, findById, updateById };

@@ -8,6 +8,9 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || "root",
   password: process.env.DBPASS,
   database: process.env.DB_NAME,
+  // Force UTC so DATE columns don't shift a day when JS Date objects round-trip
+  // (local TZ converts UTC-midnight to the previous day before MySQL truncates).
+  timezone: "Z",
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
