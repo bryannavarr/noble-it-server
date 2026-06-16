@@ -3,6 +3,7 @@
 // which serves the SPA via the catch-all at the bottom of routes/index.js.
 const router = require("express").Router();
 const clientController = require("../controllers/client.controller");
+const invoiceController = require("../controllers/invoice.controller");
 const { authenticateToken } = require("../middleware/auth.middleware");
 
 // All admin-client routes require a valid admin session.
@@ -10,5 +11,8 @@ router.use(authenticateToken);
 
 router.get("/", clientController.list);
 router.patch("/:id", clientController.update);
+
+// Sub-resources scoped to a client.
+router.get("/:clientId/invoices", invoiceController.listByClient);
 
 module.exports = router;
