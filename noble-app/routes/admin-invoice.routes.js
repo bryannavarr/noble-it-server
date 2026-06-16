@@ -7,6 +7,7 @@ const { authenticateToken } = require("../middleware/auth.middleware");
 
 router.use(authenticateToken);
 
+router.get("/", invoiceController.list);
 router.get("/:id/view-url", invoiceController.getViewUrl);
 
 module.exports = router;

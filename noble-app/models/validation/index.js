@@ -34,6 +34,7 @@ const adminLoginSchema = Joi.object({
   password: Joi.string().max(200).required(),
 });
 
+// Keep this list in sync with SORT_COLUMN_SQL in services/ticket.service.js.
 const TICKET_SORT_COLUMNS = [
   "ticket_number",
   "subject",
@@ -50,8 +51,8 @@ const ticketListSchema = Joi.object({
   search: Joi.string().trim().max(200).allow("").default(""),
   sort: Joi.string()
     .valid(...TICKET_SORT_COLUMNS)
-    .default("created_at"), // ← new
-  sortDir: Joi.string().lowercase().valid("asc", "desc").default("desc"), // ← new
+    .default("created_at"),
+  sortDir: Joi.string().lowercase().valid("asc", "desc").default("desc"),
 });
 
 // Keep this list in sync with SORT_COLUMN_SQL in services/client.service.js.
@@ -74,6 +75,8 @@ const clientListSchema = Joi.object({
   sortDir: Joi.string().lowercase().valid("asc", "desc").default("desc"),
 });
 
+// Accepts a comma-separated string of emails. Validates each address and
+// returns the normalized "a@x.com, b@x.com" form.
 const multiEmailField = Joi.string()
   .trim()
   .custom((value, helpers) => {
@@ -91,6 +94,28 @@ const multiEmailField = Joi.string()
     return list.join(", ");
   });
 
+// Keep this list in sync with SORT_COLUMN_SQL in services/invoice.service.js.
+const INVOICE_SORT_COLUMNS = [
+  "invoice_number",
+  "client_name",
+  "invoice_date",
+  "due_date",
+  "total_amount",
+  "status",
+];
+
+const invoiceListSchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  pageSize: Joi.number().integer().min(1).max(100).default(25),
+  search: Joi.string().trim().max(200).allow("").default(""),
+  sort: Joi.string()
+    .valid(...INVOICE_SORT_COLUMNS)
+    .default("invoice_date"),
+  sortDir: Joi.string().lowercase().valid("asc", "desc").default("desc"),
+});
+
+// All fields optional so the PATCH can be partial — the controller rejects an
+// empty payload.
 const clientUpdateSchema = Joi.object({
   name: Joi.string().trim().max(255),
   contact_name: Joi.string().trim().max(255).allow("", null),
@@ -114,4 +139,5 @@ module.exports = {
   ticketListSchema,
   clientListSchema,
   clientUpdateSchema,
+  invoiceListSchema,
 };

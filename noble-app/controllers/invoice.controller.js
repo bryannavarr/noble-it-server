@@ -1,13 +1,40 @@
 const responses = require("../models/responses");
 const invoiceService = require("../services/invoice.service");
 const s3Service = require("../services/s3.service");
+const { invoiceListSchema } = require("../models/validation");
+
+const list = (req, res) => {
+  const { error, value } = invoiceListSchema.validate(req.query, {
+    convert: true,
+    stripUnknown: true,
+  });
+
+  if (error) {
+    return res.status(400).json(new responses.ErrorResponse(error.details[0].message));
+  }
+
+  invoiceService
+    .listPaginated(value)
+    .then(({ items, total }) => {
+      const response = new responses.ItemsResponse(items);
+      response.meta = {
+        page: value.page,
+        pageSize: value.pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / value.pageSize)),
+      };
+      res.status(200).json(response);
+    })
+    .catch((err) => {
+      console.error("invoice controller error:", err.message);
+      res.status(500).json(new responses.ErrorResponse("Something went wrong"));
+    });
+};
 
 const listByClient = (req, res) => {
   const clientId = Number(req.params.clientId);
   if (!Number.isInteger(clientId) || clientId < 1) {
-    return res
-      .status(400)
-      .json(new responses.ErrorResponse("Invalid client id"));
+    return res.status(400).json(new responses.ErrorResponse("Invalid client id"));
   }
 
   invoiceService
@@ -27,17 +54,13 @@ const listByClient = (req, res) => {
 const getViewUrl = async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) {
-    return res
-      .status(400)
-      .json(new responses.ErrorResponse("Invalid invoice id"));
+    return res.status(400).json(new responses.ErrorResponse("Invalid invoice id"));
   }
 
   try {
     const invoice = await invoiceService.findById(id);
     if (!invoice) {
-      return res
-        .status(404)
-        .json(new responses.ErrorResponse("Invoice not found"));
+      return res.status(404).json(new responses.ErrorResponse("Invoice not found"));
     }
     if (!invoice.is_in_cloud) {
       return res
@@ -58,4 +81,4 @@ const getViewUrl = async (req, res) => {
   }
 };
 
-module.exports = { listByClient, getViewUrl };
+module.exports = { list, listByClient, getViewUrl };
