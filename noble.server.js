@@ -1,5 +1,8 @@
 // Load env vars before any other require, since modules like the DB pool
 // read process.env at require time.
+if (typeof globalThis.crypto === "undefined") {
+  globalThis.crypto = require("crypto").webcrypto;
+}
 require("dotenv").config();
 
 const express = require("express");
