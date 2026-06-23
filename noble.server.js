@@ -12,6 +12,12 @@ const cookieParser = require("cookie-parser");
 const router = require("./noble-app/routes");
 
 const app = express();
+
+// In prod we sit behind nginx, which adds X-Forwarded-For with the real client
+// IP. Tell Express to trust one upstream proxy so req.ip is correct and
+// express-rate-limit can key on the actual client (otherwise it throws
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR). "1" = trust one hop (just nginx).
+app.set("trust proxy", 1);
 const port = process.env.PORT || 5005;
 
 // Security headers
