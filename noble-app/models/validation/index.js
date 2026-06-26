@@ -114,6 +114,32 @@ const invoiceListSchema = Joi.object({
   sortDir: Joi.string().lowercase().valid("asc", "desc").default("desc"),
 });
 
+// Keep the method list in sync with the payments.method ENUM in the SQL
+// migration. Anything outside the list is rejected here before we ever try
+// to write it.
+const PAYMENT_METHODS = [
+  "ACH",
+  "CASH",
+  "ZELLE",
+  "PAYPAL",
+  "VENMO",
+  "CHECK",
+  "CREDIT_CARD",
+  "OTHER",
+];
+
+const paymentCreateSchema = Joi.object({
+  invoice_id: Joi.number().integer().min(1).required(),
+  amount: Joi.number().min(0.01).max(99999999.99).required(),
+  method: Joi.string()
+    .uppercase()
+    .valid(...PAYMENT_METHODS)
+    .required(),
+  paid_date: Joi.date().iso().required(),
+  reference_number: Joi.string().trim().max(100).allow("", null),
+  notes: Joi.string().trim().max(2000).allow("", null),
+});
+
 // All fields optional so the PATCH can be partial — the controller rejects an
 // empty payload.
 const clientUpdateSchema = Joi.object({
@@ -140,4 +166,6 @@ module.exports = {
   clientListSchema,
   clientUpdateSchema,
   invoiceListSchema,
+  paymentCreateSchema,
+  PAYMENT_METHODS,
 };
