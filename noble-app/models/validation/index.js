@@ -128,8 +128,11 @@ const PAYMENT_METHODS = [
   "OTHER",
 ];
 
+// Direct payments (recurring / retainer / etc.) have client_id but no
+// invoice_id. Payments applied to an invoice have both.
 const paymentCreateSchema = Joi.object({
-  invoice_id: Joi.number().integer().min(1).required(),
+  client_id: Joi.number().integer().min(1).required(),
+  invoice_id: Joi.number().integer().min(1).allow(null),
   amount: Joi.number().min(0.01).max(99999999.99).required(),
   method: Joi.string()
     .uppercase()

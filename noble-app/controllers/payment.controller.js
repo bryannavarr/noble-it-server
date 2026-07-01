@@ -17,6 +17,21 @@ const listByInvoice = (req, res) => {
     });
 };
 
+const listByClient = (req, res) => {
+  const clientId = Number(req.params.clientId);
+  if (!Number.isInteger(clientId) || clientId < 1) {
+    return res.status(400).json(new responses.ErrorResponse("Invalid client id"));
+  }
+
+  paymentService
+    .listByClientId(clientId)
+    .then((items) => res.status(200).json(new responses.ItemsResponse(items)))
+    .catch((err) => {
+      console.error("payment list-by-client error:", err.message);
+      res.status(500).json(new responses.ErrorResponse("Something went wrong"));
+    });
+};
+
 const create = (req, res) => {
   const { error, value } = paymentCreateSchema.validate(req.body, {
     convert: true,
@@ -33,6 +48,9 @@ const create = (req, res) => {
     .catch((err) => {
       if (err.code === "NOT_FOUND") {
         return res.status(404).json(new responses.ErrorResponse(err.message));
+      }
+      if (err.code === "VALIDATION") {
+        return res.status(400).json(new responses.ErrorResponse(err.message));
       }
       console.error("payment create error:", err.message);
       res.status(500).json(new responses.ErrorResponse("Something went wrong"));
@@ -57,4 +75,4 @@ const remove = (req, res) => {
     });
 };
 
-module.exports = { listByInvoice, create, remove };
+module.exports = { listByInvoice, listByClient, create, remove };

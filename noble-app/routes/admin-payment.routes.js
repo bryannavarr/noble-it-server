@@ -8,6 +8,7 @@ const { authenticateToken } = require("../middleware/auth.middleware");
 router.use(authenticateToken);
 
 router.get("/by-invoice/:invoiceId", paymentController.listByInvoice);
+router.get("/by-client/:clientId", paymentController.listByClient);
 router.post("/", paymentController.create);
 router.delete("/:id", paymentController.remove);
 

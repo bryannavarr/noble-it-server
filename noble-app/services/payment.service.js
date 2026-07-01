@@ -3,6 +3,7 @@ const pool = require("../db/pool");
 const SELECT_COLUMNS = `
   id,
   invoice_id,
+  client_id,
   amount,
   method,
   paid_date,
@@ -12,8 +13,23 @@ const SELECT_COLUMNS = `
   updated_at
 `;
 
-// All payments against one invoice, oldest first so callers can render a
-// chronological history.
+// For per-client listings we join the (optional) invoice so the UI can label
+// direct payments differently from invoice-linked ones.
+const LIST_SELECT_COLUMNS = `
+  p.id,
+  p.invoice_id,
+  p.client_id,
+  p.amount,
+  p.method,
+  p.paid_date,
+  p.reference_number,
+  p.notes,
+  p.created_at,
+  p.updated_at,
+  i.invoice_number
+`;
+
+// All payments against one invoice, oldest first.
 const listByInvoiceId = async (invoiceId) => {
   const [rows] = await pool.query(
     `SELECT ${SELECT_COLUMNS}
@@ -21,6 +37,20 @@ const listByInvoiceId = async (invoiceId) => {
      WHERE invoice_id = ?
      ORDER BY paid_date ASC, id ASC`,
     [invoiceId],
+  );
+  return rows;
+};
+
+// All payments for a client (direct + invoice-linked), newest first — most
+// recent activity floats to the top of the tab.
+const listByClientId = async (clientId) => {
+  const [rows] = await pool.query(
+    `SELECT ${LIST_SELECT_COLUMNS}
+     FROM payments p
+     LEFT JOIN invoices i ON i.id = p.invoice_id
+     WHERE p.client_id = ?
+     ORDER BY p.paid_date DESC, p.id DESC`,
+    [clientId],
   );
   return rows;
 };
@@ -33,13 +63,8 @@ const findById = async (id) => {
 };
 
 // Re-evaluates invoices.status + paid_at from the current payments rows.
-// Called from createPayment / deletePayment inside the same transaction as
-// the write, so the invoice and its payments never disagree.
-//
-//   sum(payments.amount) >= invoice.total_amount → PAID, paid_at = MAX(paid_date)
-//   otherwise                                   → revert to SENT, paid_at = NULL
-//                                                 (DRAFT/PENDING/APPROVED skipped — we
-//                                                 don't auto-flip those backwards either)
+// Called from create/delete inside the same transaction, ONLY when the
+// payment is tied to an invoice — direct payments don't touch invoice state.
 const recomputeInvoiceStatus = async (conn, invoiceId) => {
   const [[invoice]] = await conn.query(
     `SELECT id, total_amount, status FROM invoices WHERE id = ? FOR UPDATE`,
@@ -48,17 +73,13 @@ const recomputeInvoiceStatus = async (conn, invoiceId) => {
   if (!invoice) return null;
 
   const [[agg]] = await conn.query(
-    `SELECT
-       COALESCE(SUM(amount), 0) AS paid_total,
-       MAX(paid_date)           AS last_paid_date
-     FROM payments
-     WHERE invoice_id = ?`,
+    `SELECT COALESCE(SUM(amount), 0) AS paid_total, MAX(paid_date) AS last_paid_date
+     FROM payments WHERE invoice_id = ?`,
     [invoiceId],
   );
 
   const paidTotal = Number(agg.paid_total);
   const total = Number(invoice.total_amount);
-  // Penny tolerance for DECIMAL rounding so $99.999 ≈ $100 doesn't sit underpaid.
   const isFullyPaid = paidTotal + 0.005 >= total;
 
   if (isFullyPaid) {
@@ -69,42 +90,65 @@ const recomputeInvoiceStatus = async (conn, invoiceId) => {
     return { status: "PAID", paid_at: agg.last_paid_date, paid_total: paidTotal };
   }
 
-  // Not fully paid. If we were previously PAID, revert to SENT (the most
-  // common pre-PAID state). Otherwise leave the workflow status alone —
-  // DRAFT/PENDING_APPROVAL/APPROVED users haven't sent the invoice yet, and
-  // a payment shouldn't fake-promote those states.
   if (invoice.status === "PAID") {
     await conn.query(
       `UPDATE invoices SET status = 'SENT', paid_at = NULL WHERE id = ?`,
       [invoiceId],
     );
   }
-  return { status: invoice.status === "PAID" ? "SENT" : invoice.status, paid_at: null, paid_total: paidTotal };
+  return {
+    status: invoice.status === "PAID" ? "SENT" : invoice.status,
+    paid_at: null,
+    paid_total: paidTotal,
+  };
 };
 
-// Create one payment + recompute invoice status atomically.
+// Verify a client exists; used before inserting a direct payment so we return
+// a clean 404 instead of a FK constraint error.
+const clientExists = async (conn, clientId) => {
+  const [[row]] = await conn.query(`SELECT id FROM clients WHERE id = ? FOR UPDATE`, [clientId]);
+  return !!row;
+};
+
+// Create one payment (invoice-linked OR direct) + recompute invoice status
+// atomically if there is an invoice.
 const create = async (payload) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
-    // Lock the invoice so concurrent payment writes don't race on the sync.
-    const [[invoice]] = await conn.query(
-      `SELECT id FROM invoices WHERE id = ? FOR UPDATE`,
-      [payload.invoice_id],
-    );
-    if (!invoice) {
-      const err = new Error("Invoice not found");
+    if (!(await clientExists(conn, payload.client_id))) {
+      const err = new Error("Client not found");
       err.code = "NOT_FOUND";
       throw err;
     }
 
+    if (payload.invoice_id) {
+      const [[invoice]] = await conn.query(
+        `SELECT id, client_id FROM invoices WHERE id = ? FOR UPDATE`,
+        [payload.invoice_id],
+      );
+      if (!invoice) {
+        const err = new Error("Invoice not found");
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      // Guard against linking a payment to an invoice owned by a different
+      // client — that would corrupt the per-client totals.
+      if (Number(invoice.client_id) !== Number(payload.client_id)) {
+        const err = new Error("Invoice does not belong to this client");
+        err.code = "VALIDATION";
+        throw err;
+      }
+    }
+
     const [result] = await conn.query(
       `INSERT INTO payments
-         (invoice_id, amount, method, paid_date, reference_number, notes)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+         (invoice_id, client_id, amount, method, paid_date, reference_number, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
-        payload.invoice_id,
+        payload.invoice_id || null,
+        payload.client_id,
         payload.amount,
         payload.method,
         payload.paid_date,
@@ -113,7 +157,9 @@ const create = async (payload) => {
       ],
     );
 
-    await recomputeInvoiceStatus(conn, payload.invoice_id);
+    if (payload.invoice_id) {
+      await recomputeInvoiceStatus(conn, payload.invoice_id);
+    }
 
     await conn.commit();
 
@@ -130,15 +176,16 @@ const create = async (payload) => {
   }
 };
 
-// Delete one payment + recompute. Returns the invoice_id so the controller
-// can tell the caller "what the invoice status is now".
+// Delete one payment + recompute if it was invoice-linked. Returns the
+// invoice_id (may be null for direct payments) so callers can decide whether
+// to refetch invoice state.
 const deleteById = async (id) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
     const [[payment]] = await conn.query(
-      `SELECT id, invoice_id FROM payments WHERE id = ? FOR UPDATE`,
+      `SELECT id, invoice_id, client_id FROM payments WHERE id = ? FOR UPDATE`,
       [id],
     );
     if (!payment) {
@@ -148,10 +195,12 @@ const deleteById = async (id) => {
     }
 
     await conn.query(`DELETE FROM payments WHERE id = ?`, [id]);
-    await recomputeInvoiceStatus(conn, payment.invoice_id);
+    if (payment.invoice_id) {
+      await recomputeInvoiceStatus(conn, payment.invoice_id);
+    }
 
     await conn.commit();
-    return { id, invoice_id: payment.invoice_id };
+    return { id, invoice_id: payment.invoice_id, client_id: payment.client_id };
   } catch (err) {
     await conn.rollback();
     throw err;
@@ -160,4 +209,4 @@ const deleteById = async (id) => {
   }
 };
 
-module.exports = { listByInvoiceId, findById, create, deleteById };
+module.exports = { listByInvoiceId, listByClientId, findById, create, deleteById };
