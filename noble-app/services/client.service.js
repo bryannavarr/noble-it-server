@@ -63,18 +63,15 @@ const listPaginated = async ({ page, pageSize, search, sort, sortDir }) => {
   const whereSql = hasSearch ? `WHERE ${SEARCH_WHERE_SQL}` : "";
   const whereParams = hasSearch ? [like, like, like] : [];
 
+  // Return the FULL client shape so the row object handed to the client
+  // modal has every field the edit form touches. Returning a subset caused a
+  // data-loss bug: the form initialState defaulted missing fields to ""/false
+  // and the PATCH wrote those blanks back over real data.
+  //
   // LIMIT/OFFSET inlined as numbers (Joi-validated); search terms stay
   // parameterized. id is a stable tiebreaker for pagination.
   const [items] = await pool.query(
-    `SELECT
-       id,
-       name,
-       contact_name,
-       email,
-       phone,
-       default_rate,
-       created_at,
-       updated_at
+    `SELECT ${SELECT_COLUMNS}
      FROM clients
      ${whereSql}
      ORDER BY ${orderCol} ${orderDir}, id ${orderDir}
