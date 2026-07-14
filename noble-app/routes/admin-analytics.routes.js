@@ -9,5 +9,6 @@ router.get("/top-clients", controller.topClients);
 router.get("/new-clients", controller.newClients);
 router.get("/invoices-this-month", controller.invoicesThisMonth);
 router.get("/ticket-backlog", controller.ticketBacklog);
+router.get("/payments-list", controller.paymentsInRange);
 
 module.exports = router;

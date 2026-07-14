@@ -20,4 +20,24 @@ const newClients = wrap(() => analytics.newClientsThisMonth(), "analytics new-cl
 const invoicesThisMonth = wrap(() => analytics.invoicesThisMonth(), "analytics invoices");
 const ticketBacklog = wrap(() => analytics.ticketBacklog(), "analytics ticket-backlog");
 
-module.exports = { cashFlow, topClients, newClients, invoicesThisMonth, ticketBacklog };
+// Uses ItemsResponse (not ItemResponse) since the payload is a plain array of
+// payment rows — the frontend can iterate `items` directly.
+const paymentsInRange = (req, res) => {
+  const range = req.query.range === "year" ? "year" : "month";
+  analytics
+    .paymentsInRange(range)
+    .then((items) => res.status(200).json(new responses.ItemsResponse(items)))
+    .catch((err) => {
+      console.error("analytics payments-list error:", err.message);
+      res.status(500).json(new responses.ErrorResponse("Something went wrong"));
+    });
+};
+
+module.exports = {
+  cashFlow,
+  topClients,
+  newClients,
+  invoicesThisMonth,
+  ticketBacklog,
+  paymentsInRange,
+};

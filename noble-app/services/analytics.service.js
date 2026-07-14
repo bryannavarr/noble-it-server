@@ -87,10 +87,41 @@ const ticketBacklog = async () => {
   };
 };
 
+// Detailed payment list feeding the "click the cash-flow card to see who paid
+// what" popup. Joins client name + the linked invoice (if any) so the UI has
+// everything it needs without follow-up lookups. Newest paid_date first.
+const paymentsInRange = async (range = "month") => {
+  const period =
+    range === "year"
+      ? `DATE_FORMAT(p.paid_date, '%Y') = DATE_FORMAT(CURDATE(), '%Y')`
+      : `DATE_FORMAT(p.paid_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')`;
+  const [rows] = await pool.query(
+    `SELECT
+       p.id,
+       p.amount,
+       p.method,
+       p.paid_date,
+       p.reference_number,
+       p.notes,
+       p.invoice_id,
+       p.client_id,
+       c.name          AS client_name,
+       i.invoice_number,
+       i.status        AS invoice_status
+     FROM payments p
+     JOIN clients c   ON c.id = p.client_id
+     LEFT JOIN invoices i ON i.id = p.invoice_id
+     WHERE ${period}
+     ORDER BY p.paid_date DESC, p.id DESC`,
+  );
+  return rows;
+};
+
 module.exports = {
   cashFlow,
   topClients,
   newClientsThisMonth,
   invoicesThisMonth,
   ticketBacklog,
+  paymentsInRange,
 };
