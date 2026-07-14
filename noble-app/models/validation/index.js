@@ -128,6 +128,27 @@ const PAYMENT_METHODS = [
   "OTHER",
 ];
 
+// Admin Tools links — user-managed quick-access URLs.
+const adminLinkCreateSchema = Joi.object({
+  label: Joi.string().trim().min(1).max(255).required(),
+  url: Joi.string().trim().uri({ scheme: ["http", "https"] }).max(2048).required(),
+  sort_order: Joi.number().integer().min(0).max(9999).default(0),
+});
+
+const adminLinkUpdateSchema = Joi.object({
+  label: Joi.string().trim().min(1).max(255),
+  url: Joi.string().trim().uri({ scheme: ["http", "https"] }).max(2048),
+  sort_order: Joi.number().integer().min(0).max(9999),
+}).min(1);
+
+// Stripe checkout link generation.
+const paymentLinkCreateSchema = Joi.object({
+  amount: Joi.number().min(0.5).max(999999.99).required(),
+  description: Joi.string().trim().max(500).allow("", null),
+  client_id: Joi.number().integer().min(1).allow(null),
+  invoice_id: Joi.number().integer().min(1).allow(null),
+});
+
 // Direct payments (recurring / retainer / etc.) have client_id but no
 // invoice_id. Payments applied to an invoice have both.
 const paymentCreateSchema = Joi.object({
@@ -171,4 +192,7 @@ module.exports = {
   invoiceListSchema,
   paymentCreateSchema,
   PAYMENT_METHODS,
+  adminLinkCreateSchema,
+  adminLinkUpdateSchema,
+  paymentLinkCreateSchema,
 };

@@ -10,6 +10,9 @@ const ticketRoutes = require("./ticket.routes");
 const adminClientRoutes = require("./admin-client.routes");
 const adminInvoiceRoutes = require("./admin-invoice.routes");
 const adminPaymentRoutes = require("./admin-payment.routes");
+const adminLinkRoutes = require("./admin-link.routes");
+const adminPaymentLinkRoutes = require("./admin-payment-link.routes");
+const adminAnalyticsRoutes = require("./admin-analytics.routes");
 
 const formRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -27,6 +30,9 @@ router.use("/api/admin/tickets", ticketRoutes);
 router.use("/api/admin/clients", adminClientRoutes);
 router.use("/api/admin/invoices", adminInvoiceRoutes);
 router.use("/api/admin/payments", adminPaymentRoutes);
+router.use("/api/admin/links", adminLinkRoutes);
+router.use("/api/admin/payment-links", adminPaymentLinkRoutes);
+router.use("/api/admin/analytics", adminAnalyticsRoutes);
 
 // API error handlers (must be registered before client routes)
 useAPIErrorHandlers(router);
