@@ -53,6 +53,69 @@ const ticketListSchema = Joi.object({
     .valid(...TICKET_SORT_COLUMNS)
     .default("created_at"),
   sortDir: Joi.string().lowercase().valid("asc", "desc").default("desc"),
+  // Filter archived tickets. "active" (default) hides archived, "archived"
+  // shows only archived, "all" shows both.
+  archived: Joi.string().valid("active", "archived", "all").default("active"),
+});
+
+// Keep in sync with tickets.category enum in the DB (migration 014 is the
+// current authority: 12 categories including MISC).
+const TICKET_CATEGORIES = [
+  "BUG",
+  "MAINTENANCE",
+  "CLOUD_MAINTENANCE",
+  "DATABASE",
+  "DEPLOYMENT_STAGING",
+  "DEPLOYMENT_PROD",
+  "FEATURE",
+  "HARDWARE",
+  "BREAK_FIX",
+  "IT_SUPPORT",
+  "MEDIA_DIGITIZATION",
+  "MISC",
+];
+const TICKET_PRIORITIES = ["HIGH", "MEDIUM", "LOW"];
+const TICKET_STATUSES = [
+  "TODO",
+  "BACKLOG",
+  "IN_PROGRESS",
+  "DONE",
+  "CANCELLED",
+  "INVALID",
+];
+
+const ticketCreateSchema = Joi.object({
+  client_id: Joi.number().integer().min(1).required(),
+  subject: Joi.string().trim().min(1).max(500).required(),
+  description: Joi.string().trim().max(10000).allow("", null),
+  category: Joi.string()
+    .uppercase()
+    .valid(...TICKET_CATEGORIES)
+    .required(),
+  priority: Joi.string()
+    .uppercase()
+    .valid(...TICKET_PRIORITIES)
+    .default("MEDIUM"),
+  status: Joi.string()
+    .uppercase()
+    .valid(...TICKET_STATUSES)
+    .default("IN_PROGRESS"),
+});
+
+// Partial update — all fields optional; controller rejects an empty body.
+const ticketUpdateSchema = Joi.object({
+  subject: Joi.string().trim().min(1).max(500),
+  description: Joi.string().trim().max(10000).allow("", null),
+  category: Joi.string().uppercase().valid(...TICKET_CATEGORIES),
+  priority: Joi.string().uppercase().valid(...TICKET_PRIORITIES),
+  status: Joi.string().uppercase().valid(...TICKET_STATUSES),
+}).min(1);
+
+// Bulk archive / unarchive by a list of ids. Cap the list so a runaway
+// selection can't lock rows for too long.
+const ticketBulkArchiveSchema = Joi.object({
+  ids: Joi.array().items(Joi.number().integer().min(1)).min(1).max(500).required(),
+  archived: Joi.boolean().required(),
 });
 
 // Keep this list in sync with SORT_COLUMN_SQL in services/client.service.js.
@@ -195,4 +258,10 @@ module.exports = {
   adminLinkCreateSchema,
   adminLinkUpdateSchema,
   paymentLinkCreateSchema,
+  ticketCreateSchema,
+  ticketUpdateSchema,
+  ticketBulkArchiveSchema,
+  TICKET_CATEGORIES,
+  TICKET_PRIORITIES,
+  TICKET_STATUSES,
 };
