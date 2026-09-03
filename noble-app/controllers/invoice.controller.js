@@ -81,4 +81,86 @@ const getViewUrl = async (req, res) => {
   }
 };
 
-module.exports = { list, listByClient, getViewUrl };
+// ── Editor: preview + generate + append (proxy to noble-msp-crm) ──────────
+
+const crm = require("../services/crm-client.service");
+
+// Handle a CRM error uniformly. The CRM returns { success: false, error }
+// on 4xx/5xx; unwrap into our ErrorResponse envelope.
+const relayCrmError = (res, err, label) => {
+  const status = err.response?.status || 500;
+  const body = err.response?.data;
+  const message = body?.error || err.message || "Something went wrong";
+  console.error(`${label} error:`, message);
+  res.status(status).json(new responses.ErrorResponse(message));
+};
+
+const previewFromSelection = async (req, res) => {
+  const { client_id, ticket_ids, meeting_ids } = req.body || {};
+  if (!Number.isInteger(client_id) || client_id < 1) {
+    return res.status(400).json(new responses.ErrorResponse("client_id is required"));
+  }
+  try {
+    const r = await crm.previewFromSelection({
+      client_id,
+      ticket_ids: Array.isArray(ticket_ids) ? ticket_ids : [],
+      meeting_ids: Array.isArray(meeting_ids) ? meeting_ids : [],
+    });
+    // CRM envelope is { success, data }; unwrap into our ItemResponse.
+    res.status(200).json(new responses.ItemResponse(r.data));
+  } catch (err) {
+    relayCrmError(res, err, "preview-from-selection");
+  }
+};
+
+const createFromSelection = async (req, res) => {
+  const { client_id, invoice_date, due_date, notes, line_items } = req.body || {};
+  if (!Number.isInteger(client_id) || client_id < 1) {
+    return res.status(400).json(new responses.ErrorResponse("client_id is required"));
+  }
+  if (!Array.isArray(line_items) || line_items.length === 0) {
+    return res
+      .status(400)
+      .json(new responses.ErrorResponse("At least one line item is required"));
+  }
+  try {
+    const r = await crm.generateFromSelection({
+      client_id,
+      invoice_date,
+      due_date,
+      notes,
+      line_items,
+    });
+    res.status(201).json(new responses.ItemResponse(r.data));
+  } catch (err) {
+    relayCrmError(res, err, "generate-from-selection");
+  }
+};
+
+const appendToInvoice = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json(new responses.ErrorResponse("Invalid invoice id"));
+  }
+  const { line_items } = req.body || {};
+  if (!Array.isArray(line_items) || line_items.length === 0) {
+    return res
+      .status(400)
+      .json(new responses.ErrorResponse("At least one line item is required"));
+  }
+  try {
+    const r = await crm.appendToInvoice(id, { line_items });
+    res.status(200).json(new responses.ItemResponse(r.data));
+  } catch (err) {
+    relayCrmError(res, err, "append-to-invoice");
+  }
+};
+
+module.exports = {
+  list,
+  listByClient,
+  getViewUrl,
+  previewFromSelection,
+  createFromSelection,
+  appendToInvoice,
+};

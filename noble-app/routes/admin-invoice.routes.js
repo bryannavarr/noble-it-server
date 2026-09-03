@@ -10,4 +10,10 @@ router.use(authenticateToken);
 router.get("/", invoiceController.list);
 router.get("/:id/view-url", invoiceController.getViewUrl);
 
+// Editor endpoints — preview + create + append. Proxy to noble-msp-crm's
+// selection-based invoice endpoints.
+router.post("/preview", invoiceController.previewFromSelection);
+router.post("/", invoiceController.createFromSelection);
+router.post("/:id/append", invoiceController.appendToInvoice);
+
 module.exports = router;
