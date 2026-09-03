@@ -9,10 +9,20 @@ const axios = require("axios");
 
 const baseURL = process.env.MSP_API_URL_INTERNAL || "http://localhost:3100";
 
+// MSP_API_KEY is a shared secret between this server and noble-msp-crm.
+// The CRM's invoice endpoints reject requests without it (401). Same value
+// lives on the CLI's .env — see docs for the rotation flow. Pulled from
+// env at request time so a redeploy of just this service picks up a rotated
+// key without a full rebuild.
 const client = axios.create({
   baseURL,
   timeout: 30000, // PDF generation + S3 upload can take a moment
   headers: { "Content-Type": "application/json" },
+});
+client.interceptors.request.use((config) => {
+  const key = process.env.MSP_API_KEY;
+  if (key) config.headers["x-api-key"] = key;
+  return config;
 });
 
 const previewFromSelection = (payload) =>

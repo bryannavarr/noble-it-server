@@ -87,11 +87,25 @@ const crm = require("../services/crm-client.service");
 
 // Handle a CRM error uniformly. The CRM returns { success: false, error }
 // on 4xx/5xx; unwrap into our ErrorResponse envelope.
+//
+// IMPORTANT: translate CRM 401s into 502 upstream errors before returning
+// to the admin frontend. The frontend has a global 401 handler that clears
+// the local session and redirects to /admin/login — meant for real "user
+// session expired" cases. A CRM auth failure is a server-to-server config
+// problem (missing/wrong MSP_API_KEY) and has nothing to do with the admin
+// user's session, so we must not let it trigger a logout.
 const relayCrmError = (res, err, label) => {
-  const status = err.response?.status || 500;
+  const upstream = err.response?.status || 500;
   const body = err.response?.data;
-  const message = body?.error || err.message || "Something went wrong";
-  console.error(`${label} error:`, message);
+  const rawMessage = body?.error || err.message || "Something went wrong";
+  console.error(`${label} error:`, rawMessage);
+
+  const isUpstreamAuth = upstream === 401 || upstream === 403;
+  const status = isUpstreamAuth ? 502 : upstream;
+  const message = isUpstreamAuth
+    ? "Invoice service auth failed (check MSP_API_KEY on this server)"
+    : rawMessage;
+
   res.status(status).json(new responses.ErrorResponse(message));
 };
 
