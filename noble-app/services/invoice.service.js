@@ -10,8 +10,10 @@ const SELECT_COLUMNS = `
   total_amount,
   status,
   pdf_path,
+  stripe_url,
   is_in_cloud,
   sent_at,
+  approved_at,
   paid_at,
   created_at,
   updated_at
@@ -28,8 +30,10 @@ const LIST_SELECT_COLUMNS = `
   i.total_amount,
   i.status,
   i.pdf_path,
+  i.stripe_url,
   i.is_in_cloud,
   i.sent_at,
+  i.approved_at,
   i.paid_at,
   i.created_at,
   i.updated_at,
@@ -104,4 +108,36 @@ const listPaginated = async ({ page, pageSize, search, sort, sortDir }) => {
   return { items, total: countRow.total };
 };
 
-module.exports = { listByClientId, findById, listPaginated };
+// Flip a DRAFT / PENDING_APPROVAL invoice to APPROVED and stamp approved_at.
+// Returns the fresh row. Throws INVALID_STATE if the invoice is already past
+// approval (SENT / PAID) or has been fully rejected in some future workflow.
+const approve = async (id) => {
+  const row = await findById(id);
+  if (!row) {
+    const err = new Error("Invoice not found");
+    err.code = "NOT_FOUND";
+    throw err;
+  }
+  if (!["DRAFT", "PENDING_APPROVAL"].includes(row.status)) {
+    const err = new Error(
+      `Cannot approve invoice in ${row.status} state — only DRAFT and PENDING_APPROVAL are approvable`,
+    );
+    err.code = "INVALID_STATE";
+    throw err;
+  }
+  await pool.query(
+    `UPDATE invoices SET status = 'APPROVED', approved_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [id],
+  );
+  return findById(id);
+};
+
+// Persist a generated Stripe Checkout URL onto the invoice row. Idempotent:
+// calling again with a new URL overwrites the previous one, which is what we
+// want if the first link expired and you regenerate.
+const setStripeUrl = async (id, url) => {
+  await pool.query(`UPDATE invoices SET stripe_url = ? WHERE id = ?`, [url, id]);
+  return findById(id);
+};
+
+module.exports = { listByClientId, findById, listPaginated, approve, setStripeUrl };

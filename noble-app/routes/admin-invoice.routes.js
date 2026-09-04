@@ -16,4 +16,10 @@ router.post("/preview", invoiceController.previewFromSelection);
 router.post("/", invoiceController.createFromSelection);
 router.post("/:id/append", invoiceController.appendToInvoice);
 
+// Approve + payment link — per-invoice actions surfaced in the admin UI's
+// InvoiceActionsMenu. Approve is DB-only; payment-link mints a Stripe URL
+// via the Tools tab's underlying service and stores it on the invoice row.
+router.patch("/:id/approve", invoiceController.approve);
+router.post("/:id/payment-link", invoiceController.generatePaymentLink);
+
 module.exports = router;

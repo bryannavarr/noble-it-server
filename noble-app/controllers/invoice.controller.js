@@ -170,6 +170,92 @@ const appendToInvoice = async (req, res) => {
   }
 };
 
+// ── Approve + payment-link (per-invoice actions) ──────────────────────────
+
+const paymentLinkService = require("../services/payment-link.service");
+
+const approve = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json(new responses.ErrorResponse("Invalid invoice id"));
+  }
+  try {
+    const row = await invoiceService.approve(id);
+    res.status(200).json(new responses.ItemResponse(row));
+  } catch (err) {
+    if (err.code === "NOT_FOUND") {
+      return res.status(404).json(new responses.ErrorResponse(err.message));
+    }
+    if (err.code === "INVALID_STATE") {
+      return res.status(400).json(new responses.ErrorResponse(err.message));
+    }
+    console.error("invoice approve error:", err.message);
+    res.status(500).json(new responses.ErrorResponse("Something went wrong"));
+  }
+};
+
+// Generate a Stripe Checkout link for an approved invoice. Reuses the same
+// service the Tools tab uses, then stores the URL on the invoice row so the
+// admin UI can surface it (and so you can regenerate + still have the
+// previous URL replaced atomically).
+const generatePaymentLink = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json(new responses.ErrorResponse("Invalid invoice id"));
+  }
+  try {
+    const inv = await invoiceService.findById(id);
+    if (!inv) {
+      return res.status(404).json(new responses.ErrorResponse("Invoice not found"));
+    }
+    // Per product spec: payment link is only available after approval. This
+    // guard makes the constraint explicit at the API layer so no frontend
+    // bug can slip through and mint a link for an unapproved draft.
+    if (!["APPROVED", "SENT", "PAID"].includes(inv.status)) {
+      return res
+        .status(400)
+        .json(
+          new responses.ErrorResponse(
+            "Invoice must be approved before generating a payment link",
+          ),
+        );
+    }
+
+    const amount = Number(inv.total_amount);
+    if (!(amount > 0)) {
+      return res
+        .status(400)
+        .json(new responses.ErrorResponse("Invoice total must be greater than $0"));
+    }
+
+    // Pull the client name for the Stripe checkout description — helps the
+    // customer see WHY they're being charged in the Stripe UI.
+    const [[client]] = await require("../db/pool").query(
+      `SELECT name FROM clients WHERE id = ?`,
+      [inv.client_id],
+    );
+    const description = client
+      ? `Invoice ${inv.invoice_number} — ${client.name}`
+      : `Invoice ${inv.invoice_number}`;
+
+    const result = await paymentLinkService.createCheckoutLink({
+      amount,
+      description,
+      client_id: inv.client_id,
+      invoice_id: inv.id,
+    });
+
+    const updated = await invoiceService.setStripeUrl(id, result.url);
+    res.status(200).json(new responses.ItemResponse(updated));
+  } catch (err) {
+    if (err.code === "NOT_CONFIGURED") {
+      return res.status(503).json(new responses.ErrorResponse(err.message));
+    }
+    console.error("invoice payment-link error:", err.message);
+    res.status(500).json(new responses.ErrorResponse("Something went wrong"));
+  }
+};
+
 module.exports = {
   list,
   listByClient,
@@ -177,4 +263,6 @@ module.exports = {
   previewFromSelection,
   createFromSelection,
   appendToInvoice,
+  approve,
+  generatePaymentLink,
 };
