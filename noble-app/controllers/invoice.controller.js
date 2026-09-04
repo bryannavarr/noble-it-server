@@ -246,6 +246,19 @@ const generatePaymentLink = async (req, res) => {
     });
 
     const updated = await invoiceService.setStripeUrl(id, result.url);
+
+    // Regenerate the PDF so it includes the clickable Pay Online button.
+    // Not fatal if this fails — the URL is stored and copyable regardless;
+    // customer can still pay via the link even if the PDF button is stale.
+    try {
+      await crm.regeneratePdf(id);
+    } catch (regenErr) {
+      console.warn(
+        `payment-link: URL stored but PDF regeneration failed for invoice ${id}:`,
+        regenErr.response?.data?.error || regenErr.message,
+      );
+    }
+
     res.status(200).json(new responses.ItemResponse(updated));
   } catch (err) {
     if (err.code === "NOT_CONFIGURED") {

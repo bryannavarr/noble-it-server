@@ -84,6 +84,14 @@ const TICKET_STATUSES = [
   "INVALID",
 ];
 
+// Inline work-log row for on-ticket-creation batch logging. Same shape the
+// CLI's msp log path uses. qty is hours for hourly categories.
+const ticketWorkLogSchema = Joi.object({
+  worked_date: Joi.date().iso().required(),
+  qty: Joi.number().min(0.01).max(9999.99).required(),
+  description: Joi.string().trim().max(2000).allow("", null),
+});
+
 const ticketCreateSchema = Joi.object({
   client_id: Joi.number().integer().min(1).required(),
   subject: Joi.string().trim().min(1).max(500).required(),
@@ -100,6 +108,12 @@ const ticketCreateSchema = Joi.object({
     .uppercase()
     .valid(...TICKET_STATUSES)
     .default("IN_PROGRESS"),
+  // Optional creation-date override for backfilling historical tickets. If
+  // omitted, MySQL's CURRENT_TIMESTAMP default applies.
+  created_at: Joi.date().iso().allow(null),
+  // Optional inline work_logs — batch-attach hours to the ticket at create
+  // time. Empty array is valid (same as omitting).
+  work_logs: Joi.array().items(ticketWorkLogSchema).max(100).default([]),
 });
 
 // Partial update — all fields optional; controller rejects an empty body.

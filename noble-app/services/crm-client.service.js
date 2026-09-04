@@ -34,4 +34,12 @@ const generateFromSelection = (payload) =>
 const appendToInvoice = (invoiceId, payload) =>
   client.post(`/api/invoices/${invoiceId}/append`, payload).then((r) => r.data);
 
-module.exports = { previewFromSelection, generateFromSelection, appendToInvoice };
+const regeneratePdf = (invoiceId) =>
+  client.post(`/api/invoices/${invoiceId}/regenerate-pdf`).then((r) => r.data);
+
+module.exports = {
+  previewFromSelection,
+  generateFromSelection,
+  appendToInvoice,
+  regeneratePdf,
+};

@@ -131,23 +131,66 @@ const create = async (payload) => {
 
     const ticketNumber = await allocateNextTicketNumber(conn, payload.client_id);
 
+    // Build INSERT dynamically so we only include created_at when the caller
+    // supplied an override — otherwise MySQL applies its CURRENT_TIMESTAMP
+    // default and everything Just Works.
+    const hasCreatedAt = payload.created_at != null;
+    const cols = [
+      "ticket_number",
+      "client_id",
+      "subject",
+      "description",
+      "category",
+      "priority",
+      "status",
+    ];
+    const vals = [
+      ticketNumber,
+      payload.client_id,
+      payload.subject,
+      payload.description || null,
+      payload.category,
+      payload.priority || "MEDIUM",
+      payload.status || "IN_PROGRESS",
+    ];
+    if (hasCreatedAt) {
+      cols.push("created_at");
+      // Format Date → 'YYYY-MM-DD HH:MM:SS' so MySQL parses regardless of
+      // the connection's timezone quirks.
+      const d = new Date(payload.created_at);
+      const iso = d.toISOString().slice(0, 19).replace("T", " ");
+      vals.push(iso);
+    }
+
     const [result] = await conn.query(
-      `INSERT INTO tickets
-         (ticket_number, client_id, subject, description, category, priority, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        ticketNumber,
-        payload.client_id,
-        payload.subject,
-        payload.description || null,
-        payload.category,
-        payload.priority || "MEDIUM",
-        payload.status || "IN_PROGRESS",
-      ],
+      `INSERT INTO tickets (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`,
+      vals,
     );
+    const ticketId = result.insertId;
+
+    // Optional inline work_logs — batch-attach at create time so the admin
+    // can log historical hours in one form instead of jumping to a second
+    // screen after saving.
+    if (Array.isArray(payload.work_logs) && payload.work_logs.length) {
+      for (const log of payload.work_logs) {
+        const workedDate = new Date(log.worked_date).toISOString().slice(0, 10);
+        await conn.query(
+          `INSERT INTO work_logs
+             (ticket_id, client_id, qty, description, worked_date)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            ticketId,
+            payload.client_id,
+            Number(log.qty),
+            log.description?.trim() || null,
+            workedDate,
+          ],
+        );
+      }
+    }
 
     await conn.commit();
-    return findById(result.insertId);
+    return findById(ticketId);
   } catch (err) {
     await conn.rollback();
     throw err;
